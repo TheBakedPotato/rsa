@@ -41,10 +41,11 @@ class Key:
     def __init__(self, bitLength):
         p = mpz(number.getPrime(int(bitLength/2)))
         q = mpz(number.getPrime(int(bitLength/2)))
-        while p == q or (not (p < q and q < 2*p) and not (q < p and p < 2*q)):
-            q = mpz(number.getPrime(int(bitLength/2)))
-
         n = p * q
+        while p == q or (not (p < q and q < 2*p) and not (q < p and p < 2*q)) or n.bit_length() < bitLength:
+            q = mpz(number.getPrime(int(bitLength/2)))
+            n = p * q
+
         phiN = (p - 1) * (q - 1)
         e = mpz(65537)
 
@@ -123,38 +124,54 @@ def rand_num(bitLength):
         num = random.getrandbits(bitLength)
     return num
 
-num_warm_ups = 5
-num_tests = 50
+num_tests = 10
 msg_size = 256
 
-keys = [ Key(2048), Key(3072) ]
-message = mpz(rand_num(msg_size))
+num_messages = 10
+num_keys = 5
+key_lengths = [ 2048, 3072 ]
 
-print("Message: " + str(message))
+print("Creating keys...")
+keys = { key_len : [ Key(key_len) for i in range(num_keys) ] for key_len in key_lengths }
+print("Done.\n")
+
+print("Creating messages...")
+messages = [ mpz(rand_num(msg_size)) for i in range(num_messages) ]
+print("Done.\n")
+
 def test(encrypt, decrypt):
-    for key in keys:
-        print ("Key Length: " + str(key.n.bit_length()))
-        for i in range(num_warm_ups):
-            cipher = encrypt(message, key)
-            plainText = decrypt(cipher, key)
+    for key_len, keyList in keys.items():
+        print ("   Key Length:", key_len)
+        for key in keyList:
+            for message in messages:
+                cipher = encrypt(message, key)
+                plainText = decrypt(cipher, key)
 
         eTimes = []
         dTimes = []
-        for i in range(num_tests):
-            start = time()
-            cipher = encrypt(message, key)
-            stop = time()
-            eTimes.append((stop - start) * 1000)
-            start = time()
-            plainText = decrypt(cipher, key)
-            stop = time()
-            dTimes.append((stop - start) * 1000)
-            if plainText != message:
-                print ("Trial " + str(i))
-                print ("P: " + str(plainText))
+        for key in keyList:
+            for i in range(num_tests):
+                for message in messages:
+                    start = time()
+                    cipher = encrypt(message, key)
+                    stop = time()
+                    eTimes.append((stop - start) * 1000)
+                    start = time()
+                    plainText = decrypt(cipher, key)
+                    stop = time()
+                    dTimes.append((stop - start) * 1000)
+                    if plainText != message:
+                        print ("   Trial", i)
+                        print ("   P:", plainText)
 
-        print(statistics.mean(eTimes))
-        print(statistics.mean(dTimes))
+        print("      Encryption")
+        print("         Mean:    ", statistics.mean(eTimes), "ms")
+        print("         Median:  ", statistics.median(eTimes), "ms")
+        print("         St. Dev.:", statistics.stdev(eTimes), "ms")
+        print("      Decryption")
+        print("         Mean:    ", statistics.mean(dTimes), "ms")
+        print("         Median:  ", statistics.median(dTimes), "ms")
+        print("         St. Dev.:", statistics.stdev(dTimes), "ms")
 
 def textbook_rsa_encrypt(plainText, key):
     return power(plainText, key.e, key.n)
